@@ -24,6 +24,7 @@ class AccountWithdraw extends Model
     ];
 
     protected array $casts = [
+        'id' => 'string',
         'scheduled' => 'integer',
         'done' => 'integer',
         'error' => 'integer',

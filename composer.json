@@ -14,9 +14,11 @@
     "require": {
         "php": ">=8.1",
         "brick/money": "^0.10.3",
+        "friendsofhyperf/mail": "^3.1",
         "hyperf/cache": "~3.1.0",
         "hyperf/command": "~3.1.0",
         "hyperf/config": "~3.1.0",
+        "hyperf/crontab": "~3.1.0",
         "hyperf/database": "~3.1.0",
         "hyperf/db-connection": "~3.1.0",
         "hyperf/engine": "^2.10",

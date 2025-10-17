@@ -16,6 +16,10 @@ class AccountWithdrawPix extends Model
     protected array $fillable = [
         'account_withdraw_id', 'type', 'key',
     ];
+
+    protected array $casts = [
+        'account_withdraw_id' => 'string',
+    ];
 }
 
 

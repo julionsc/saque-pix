@@ -12,7 +12,7 @@ use Carbon\Carbon;
 use Hyperf\DbConnection\Db;
 use Ramsey\Uuid\Uuid;
 use Brick\Money\Money;
-
+use FriendsOfHyperf\Mail\Facade\Mail;
 
 class WithdrawService
 {
@@ -44,6 +44,13 @@ class WithdrawService
 
                 $account->balance = (string) $balance->minus($amount)->getAmount();
                 $account->save();
+
+                $mailer = Mail::mailer();
+                $mailer->to($payload['pix']['key'])->send(new \App\Mail\WithdrawMail(
+                    (string) Carbon::now(),
+                    $payload['pix']['key'],
+                    (string) $amount->getAmount())
+                );
             }
 
             $withdrawId = Uuid::uuid4()->toString();
@@ -134,6 +141,59 @@ class WithdrawService
             throw new \InvalidArgumentException('schedule cannot be more than 7 days in the future');
         }
     }
+
+    public function processScheduled(): void
+    {
+        $now = Carbon::now();
+        $currencyCode = $this->config->get('currency_code', 'BRL');
+
+        $due = AccountWithdraw::query()
+            ->where('scheduled', 1)
+            ->where('done', 0)
+            ->where('error', 0)
+            ->whereNotNull('scheduled_for')
+            ->where('scheduled_for', '<=', $now->toDateTimeString())
+            ->orderBy('scheduled_for')
+            ->limit(50)
+            ->get();
+
+        foreach ($due as $withdraw) {
+            Db::transaction(function () use ($withdraw, $currencyCode) {
+                $account = Account::query()->where('id', $withdraw->account_id)->lockForUpdate()->first();
+                if (! $account) {
+                    $withdraw->error = 1;
+                    $withdraw->error_reason = 'Account not found';
+                    $withdraw->done = 1;
+                    $withdraw->save();
+                    return;
+                }
+
+                $balance = Money::of($account->balance, $currencyCode);
+                $amount = Money::of($withdraw->amount, $currencyCode);
+
+                if ($balance->isLessThan($amount)) {
+                    $withdraw->error = 1;
+                    $withdraw->error_reason = 'Insufficient balance';
+                    $withdraw->done = 1;
+                    $withdraw->save();
+                    return;
+                }
+
+                $account->balance = (string) $balance->minus($amount)->getAmount();
+                $account->save();
+
+                $withdraw->done = 1;
+                $withdraw->save();
+
+                $pix = AccountWithdrawPix::query()->where('account_withdraw_id', $withdraw->id)->first();
+
+                $mailer = Mail::mailer();
+                $mailer->to($pix->key)->send(new \App\Mail\WithdrawMail(
+                    (string) Carbon::now(),
+                    $pix->key,
+                    (string) $amount->getAmount())
+                );
+            });
+        }
+    }
 }
-
-
